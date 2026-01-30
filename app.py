@@ -1,5 +1,4 @@
 import streamlit as st
-from core.split_data import SPLIT_DATA
 
 # -------- Core imports --------
 from core.loader import load_excel
@@ -8,6 +7,9 @@ from core.filters import (
     get_subcomponents,
     filter_data
 )
+
+# -------- Fixed split data --------
+from core.split_data import SPLIT_DATA
 
 # -------- UI imports --------
 from ui.sidebar import sidebar_upload
@@ -28,7 +30,7 @@ st.markdown(
     <div style="padding:10px 0;">
         <h1 style="margin-bottom:0;">Maintenance Decision Console</h1>
         <p style="color:gray; margin-top:4px;">
-            Component → Subcomponent → Summary & Detailed Time Split
+            Component → Subcomponent → Summary & Detailed Procedure View
         </p>
     </div>
     """,
@@ -44,19 +46,19 @@ if not uploaded_file:
     st.info("⬅️ Upload an Excel file from the sidebar to begin analysis.")
     st.stop()
 
-# -------- Load Excel (MAIN + SPLIT DATA) --------
+# -------- Load Excel --------
 try:
-    main_df, split_df = load_excel(uploaded_file)
+    main_df = load_excel(uploaded_file)
 except Exception as e:
     st.error("Failed to load Excel file.")
     st.exception(e)
     st.stop()
 
 # -------- Column preview --------
-with st.expander("📄 View detected Excel columns (Main sheet)"):
+with st.expander("📄 View detected Excel columns"):
     st.write(list(main_df.columns))
 
-# -------- Main components --------
+# -------- Get main components --------
 main_components = get_main_components(main_df)
 
 if not main_components:
@@ -70,7 +72,7 @@ if "last_component" not in st.session_state:
 # -------- Main component selector --------
 selected_component = component_selector(main_components)
 
-# -------- Reset subcomponents on component change --------
+# -------- Reset subcomponent state on component change --------
 if selected_component and selected_component != st.session_state.last_component:
     for key in list(st.session_state.keys()):
         if key.startswith("subs_"):
@@ -103,37 +105,16 @@ if selected_component:
         st.info("Select one or more subcomponents to view data.")
         st.stop()
 
-    # -------- Summary table --------
+    # -------- Summary table (from Excel) --------
     result_df = filter_data(main_df, selected_component, selected_subs)
 
     st.divider()
-    show_table(result_df, title="Selected Maintenance Tasks (Summary)")
+    show_table(
+        result_df,
+        title="Selected Maintenance Tasks (Summary)"
+    )
 
-
-
-    
- # -------- Fixed split data (inbuilt, eye-vision only) --------
-    if len(selected_subs) == 1:
-        sub = selected_subs[0]
-
-        if sub in SPLIT_DATA:
-            st.divider()
-            st.subheader(f"Detailed Time Split for: **{sub}**")
-
-            st.dataframe(
-                SPLIT_DATA[sub],
-                use_container_width=True,
-                hide_index=True
-            )
-        else:
-            st.info(
-                "No detailed split procedure defined for this subcomponent yet."
-            )
-
-
-    
-
-    # -------- Metrics (summary only) --------
+    # -------- Summary metrics --------
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -151,25 +132,24 @@ if selected_component:
             round(result_df.iloc[:, 6].mean(), 2)
         )
 
-    # -------- Detailed split table (ONLY when ONE subcomponent selected) --------
-    if split_df is not None and len(selected_subs) == 1:
-        st.divider()
-        st.subheader(
-            f"Detailed Time Split for: **{selected_subs[0]}**"
-        )
+    # -------- Detailed split table (FIXED, INBUILT) --------
+    if len(selected_subs) == 1:
+        sub = selected_subs[0]
 
-        split_view = split_df[
-            split_df["Subcomponent"] == selected_subs[0]
-        ]
+        if sub in SPLIT_DATA:
+            st.divider()
+            st.subheader(
+                f"Detailed Time Split for: **{sub}**"
+            )
 
-        if split_view.empty:
-            st.info("No detailed split data available for this subcomponent.")
-        else:
-            # Eye-vision only: show EXACT Excel data
             st.dataframe(
-                split_view,
+                SPLIT_DATA[sub],
                 use_container_width=True,
                 hide_index=True
+            )
+        else:
+            st.info(
+                "No detailed procedure data defined for this subcomponent."
             )
 
 else:

@@ -14,6 +14,10 @@ uploaded_file = st.file_uploader("Upload Excel file", type=["xlsx"])
 if uploaded_file:
     df = load_excel(uploaded_file)
 
+    # Header preview (safe place)
+    st.caption("Detected columns:")
+    st.write(list(df.columns))
+
     main_components = get_main_components(df)
 
     st.subheader("Main Components")
@@ -37,6 +41,3 @@ if uploaded_file:
 
         st.subheader("Selected Data")
         st.dataframe(result_df, use_container_width=True)
-        
-st.caption("Detected columns:")
-st.write(list(df.columns))

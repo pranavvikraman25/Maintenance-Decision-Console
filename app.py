@@ -1,6 +1,6 @@
 import streamlit as st
 
-# -------- Core imports (correct package paths) --------
+# -------- Core imports --------
 from core.loader import load_excel
 from core.filters import (
     get_main_components,
@@ -14,7 +14,7 @@ from ui.components import component_selector
 from ui.tables import show_table
 
 
-# -------- Page config --------
+# -------- Page configuration --------
 st.set_page_config(
     page_title="Maintenance Decision Console",
     page_icon="🛠️",
@@ -36,15 +36,14 @@ st.markdown(
 
 st.divider()
 
-# -------- Sidebar --------
+# -------- Sidebar upload --------
 uploaded_file = sidebar_upload()
 
-# -------- Main logic --------
 if not uploaded_file:
     st.info("⬅️ Upload an Excel file from the sidebar to begin analysis.")
     st.stop()
 
-# -------- Load data --------
+# -------- Load Excel --------
 try:
     df = load_excel(uploaded_file)
 except Exception as e:
@@ -52,23 +51,34 @@ except Exception as e:
     st.exception(e)
     st.stop()
 
-# -------- Column preview (trust builder) --------
+# -------- Column preview --------
 with st.expander("📄 View detected Excel columns"):
     st.write(list(df.columns))
 
-# -------- Component selection --------
+# -------- Get main components --------
 main_components = get_main_components(df)
 
 if not main_components:
-    st.warning("No components found in the uploaded file.")
+    st.warning("No main components found in the uploaded file.")
     st.stop()
 
+# -------- Session state init --------
+if "last_component" not in st.session_state:
+    st.session_state.last_component = None
+
+# -------- Main component selector --------
 selected_component = component_selector(main_components)
+
+# -------- Reset subcomponents when component changes --------
+if selected_component and selected_component != st.session_state.last_component:
+    for key in list(st.session_state.keys()):
+        if key.startswith("subs_"):
+            del st.session_state[key]
+    st.session_state.last_component = selected_component
 
 # -------- Subcomponent selection --------
 if selected_component:
     st.divider()
-
     st.subheader(f"Subcomponents for: **{selected_component}**")
 
     sub_components = get_subcomponents(df, selected_component)
@@ -77,14 +87,19 @@ if selected_component:
         st.warning("No subcomponents available for this component.")
         st.stop()
 
+    state_key = f"subs_{selected_component}"
+
+    if state_key not in st.session_state:
+        st.session_state[state_key] = []
+
     selected_subs = st.multiselect(
         label="Select one or more subcomponents",
         options=sub_components,
-        default=[sub_components[0]]
+        key=state_key
     )
 
     if not selected_subs:
-        st.info("Select at least one subcomponent to view data.")
+        st.info("Select one or more subcomponents to view data.")
         st.stop()
 
     # -------- Filtered data --------
@@ -95,7 +110,7 @@ if selected_component:
     # -------- Result table --------
     show_table(result_df, title="Selected Maintenance Tasks")
 
-    # -------- Summary metrics (visual polish) --------
+    # -------- Summary metrics --------
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -112,6 +127,5 @@ if selected_component:
             "Avg Manpower / Task",
             round(result_df.iloc[:, 6].mean(), 2)
         )
-
 else:
     st.info("Select a main component to continue.")

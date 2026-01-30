@@ -1,4 +1,5 @@
 import streamlit as st
+from core.split_data import SPLIT_DATA
 
 # -------- Core imports --------
 from core.loader import load_excel
@@ -107,6 +108,30 @@ if selected_component:
 
     st.divider()
     show_table(result_df, title="Selected Maintenance Tasks (Summary)")
+
+
+
+    
+ # -------- Fixed split data (inbuilt, eye-vision only) --------
+    if len(selected_subs) == 1:
+        sub = selected_subs[0]
+
+        if sub in SPLIT_DATA:
+            st.divider()
+            st.subheader(f"Detailed Time Split for: **{sub}**")
+
+            st.dataframe(
+                SPLIT_DATA[sub],
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info(
+                "No detailed split procedure defined for this subcomponent yet."
+            )
+
+
+    
 
     # -------- Metrics (summary only) --------
     col1, col2, col3 = st.columns(3)

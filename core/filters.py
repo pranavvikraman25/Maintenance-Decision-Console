@@ -1,13 +1,20 @@
 def get_main_components(df):
-    return sorted(df["Main_Component"].unique())
+    return sorted(df.iloc[:, COL_MAIN_COMPONENT].dropna().unique())
 
 def get_subcomponents(df, main_component):
     return sorted(
-        df[df["Main_Component"] == main_component]["Sub_Component"].unique()
+        df[df.iloc[:, COL_MAIN_COMPONENT] == main_component]
+        .iloc[:, COL_SUB_COMPONENT]
+        .dropna()
+        .unique()
     )
 
 def filter_data(df, main_component, subcomponents):
-    filtered = df[df["Main_Component"] == main_component]
+    filtered = df[df.iloc[:, COL_MAIN_COMPONENT] == main_component]
+
     if subcomponents:
-        filtered = filtered[filtered["Sub_Component"].isin(subcomponents)]
+        filtered = filtered[
+            filtered.iloc[:, COL_SUB_COMPONENT].isin(subcomponents)
+        ]
+
     return filtered

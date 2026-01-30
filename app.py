@@ -13,20 +13,16 @@ def login_gate():
 
     st.set_page_config(page_title="Login required", layout="centered")
 
-    # --- KONE LOGO (local or URL) ---
-    # Option 1: local file -> put logo in /assets/kone_logo.png
-    # Option 2: URL -> replace src
     st.markdown(
         """
         <div style="text-align:center;">
             <img src="https://upload.wikimedia.org/wikipedia/commons/6/6a/KONE_Logo.svg"
                  width="180"/>
+            <h3>Login required</h3>
         </div>
         """,
         unsafe_allow_html=True
     )
-
-    st.markdown("<h3 style='text-align:center;'>Login required</h3>", unsafe_allow_html=True)
 
     username = st.text_input("Username / Email")
     password = st.text_input("Password", type="password")
@@ -44,12 +40,6 @@ def login_gate():
 login_gate()
 
 # =========================================================
-# IMPORTS (AFTER LOGIN)
-# =========================================================
-from core.loader import load_excel
-from core.split_data import SPLIT_DATA
-
-# =========================================================
 # PAGE CONFIG
 # =========================================================
 st.set_page_config(
@@ -58,20 +48,17 @@ st.set_page_config(
     layout="wide"
 )
 
-st.markdown(
-    """
-    <h1>Maintenance Decision Console</h1>
-    <p style="color:gray;">
-    Module → Sub-module → Components → Summary & Procedure
-    </p>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown("""
+<h1>Maintenance Decision Console</h1>
+<p style="color:gray;">
+Module → Sub Module → Components → Summary & Procedure
+</p>
+""", unsafe_allow_html=True)
 
 st.divider()
 
 # =========================================================
-# SIDEBAR – FILE UPLOAD
+# LOAD DATA
 # =========================================================
 uploaded_file = st.sidebar.file_uploader("Upload Excel file", type=["xlsx"])
 
@@ -79,129 +66,114 @@ if not uploaded_file:
     st.info("⬅️ Upload an Excel file to begin.")
     st.stop()
 
-# =========================================================
-# LOAD EXCEL
-# =========================================================
-df = load_excel(uploaded_file)
+df = pd.read_excel(uploaded_file)
 
 # =========================================================
-# COLUMN INDEX DEFINITIONS (ONLY CHANGE HERE IF NEEDED)
+# REQUIRED COLUMN NAMES (STRICT CHECK)
 # =========================================================
-COL_MODULE = 1
-COL_SUBMODULE = 2
-COL_COMPONENT = 3
+REQUIRED_COLUMNS = [
+    "Module",
+    "Sub Module",
+    "Components",
+    "Preparation/Finalization (h:mm:ss)",
+    "Activity (h:mm:ss)",
+    "Total time (h:mm:ss)",
+    "No of man power",
+    "Practical(Site)/Theoretical"
+]
+
+missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+
+if missing:
+    st.error(f"Missing required columns: {missing}")
+    st.stop()
 
 # =========================================================
-# SESSION STATE INIT
+# SESSION STATE
 # =========================================================
-for key in ["module", "submodule", "components"]:
-    if key not in st.session_state:
-        st.session_state[key] = None if key != "components" else []
+if "selected_module" not in st.session_state:
+    st.session_state.selected_module = None
+
+if "selected_submodule" not in st.session_state:
+    st.session_state.selected_submodule = None
 
 # =========================================================
-# MODULE SELECTION
+# MODULE SELECTION (BOX STYLE)
 # =========================================================
 st.subheader("Module")
 
-modules = sorted(df.iloc[:, COL_MODULE].dropna().unique())
+modules = sorted(df["Module"].dropna().unique())
+cols = st.columns(min(5, len(modules)))
 
-selected_module = st.selectbox(
-    "Select module",
-    options=["-- Select --"] + modules
-)
+clicked = None
+for i, module in enumerate(modules):
+    if cols[i % len(cols)].button(module):
+        clicked = module
 
-if selected_module == "-- Select --":
+if clicked:
+    st.session_state.selected_module = clicked
+    st.session_state.selected_submodule = None
+
+if not st.session_state.selected_module:
+    st.info("Select a module to continue.")
     st.stop()
 
-if selected_module != st.session_state.module:
-    st.session_state.module = selected_module
-    st.session_state.submodule = None
-    st.session_state.components = []
-
 # =========================================================
-# SUB-MODULE SELECTION
+# SUB MODULE
 # =========================================================
-st.subheader("Sub-module")
+st.subheader("Sub Module")
 
 submodules = sorted(
-    df[df.iloc[:, COL_MODULE] == selected_module]
-    .iloc[:, COL_SUBMODULE]
+    df[df["Module"] == st.session_state.selected_module]["Sub Module"]
     .dropna()
     .unique()
 )
 
 selected_submodule = st.selectbox(
-    "Select sub-module",
+    "Select sub module",
     options=["-- Select --"] + submodules
 )
 
 if selected_submodule == "-- Select --":
     st.stop()
 
-if selected_submodule != st.session_state.submodule:
-    st.session_state.submodule = selected_submodule
-    st.session_state.components = []
+st.session_state.selected_submodule = selected_submodule
 
 # =========================================================
-# COMPONENT SELECTION
+# COMPONENTS
 # =========================================================
 st.subheader("Components")
 
 components = sorted(
     df[
-        (df.iloc[:, COL_MODULE] == selected_module) &
-        (df.iloc[:, COL_SUBMODULE] == selected_submodule)
-    ]
-    .iloc[:, COL_COMPONENT]
+        (df["Module"] == st.session_state.selected_module) &
+        (df["Sub Module"] == st.session_state.selected_submodule)
+    ]["Components"]
     .dropna()
     .unique()
 )
 
 selected_components = st.multiselect(
     "Select components",
-    options=components,
-    key="components"
+    options=components
 )
 
 if not selected_components:
     st.stop()
 
 # =========================================================
-# FILTERED TABLE (REMOVE S.no, RESET NUMBERING)
+# FILTER DATA (REMOVE S.NO, RESET INDEX)
 # =========================================================
 filtered_df = df[
-    (df.iloc[:, COL_MODULE] == selected_module) &
-    (df.iloc[:, COL_SUBMODULE] == selected_submodule) &
-    (df.iloc[:, COL_COMPONENT].isin(selected_components))
+    (df["Module"] == st.session_state.selected_module) &
+    (df["Sub Module"] == st.session_state.selected_submodule) &
+    (df["Components"].isin(selected_components))
 ].copy()
 
-# Drop original S.no
-filtered_df = filtered_df.drop(columns=filtered_df.columns[0])
-
-# Reset numbering from 1
+filtered_df.reset_index(drop=True, inplace=True)
 filtered_df.insert(0, "No", range(1, len(filtered_df) + 1))
 
 st.divider()
 st.subheader("Selected Maintenance Tasks (Summary)")
 
 st.dataframe(filtered_df, use_container_width=True)
-
-# =========================================================
-# PROCEDURE / SPLIT TABLES (OPTIONAL, PER COMPONENT)
-# =========================================================
-st.divider()
-st.subheader("Detailed Time Split")
-
-found = False
-for comp in selected_components:
-    if comp in SPLIT_DATA:
-        found = True
-        st.markdown(f"### 🔧 {comp}")
-        st.dataframe(
-            SPLIT_DATA[comp],
-            use_container_width=True,
-            hide_index=True
-        )
-
-if not found:
-    st.info("No procedure data available for selected components.")

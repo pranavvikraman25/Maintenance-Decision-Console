@@ -1,7 +1,7 @@
 import pandas as pd
 
 SPLIT_DATA = {
-    "CPU561": pd.DataFrame([
+    "ERD_Battery_MR": pd.DataFrame([
         {
             "Start Time": "",
             "Stop Time": "",

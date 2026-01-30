@@ -1,5 +1,5 @@
 import pandas as pd
-
+import load_excel
 def load_excel(file):
     df = pd.read_excel(file)
 

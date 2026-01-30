@@ -37,3 +37,6 @@ if uploaded_file:
 
         st.subheader("Selected Data")
         st.dataframe(result_df, use_container_width=True)
+        
+st.caption("Detected columns:")
+st.write(list(df.columns))

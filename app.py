@@ -27,7 +27,7 @@ st.markdown(
     <div style="padding:10px 0;">
         <h1 style="margin-bottom:0;">Maintenance Decision Console</h1>
         <p style="color:gray; margin-top:4px;">
-            Component → Subcomponent → Time & Manpower Analysis
+            Component → Subcomponent → Summary & Detailed Time Split
         </p>
     </div>
     """,
@@ -43,20 +43,20 @@ if not uploaded_file:
     st.info("⬅️ Upload an Excel file from the sidebar to begin analysis.")
     st.stop()
 
-# -------- Load Excel --------
+# -------- Load Excel (MAIN + SPLIT DATA) --------
 try:
-    df = load_excel(uploaded_file)
+    main_df, split_df = load_excel(uploaded_file)
 except Exception as e:
     st.error("Failed to load Excel file.")
     st.exception(e)
     st.stop()
 
 # -------- Column preview --------
-with st.expander("📄 View detected Excel columns"):
-    st.write(list(df.columns))
+with st.expander("📄 View detected Excel columns (Main sheet)"):
+    st.write(list(main_df.columns))
 
-# -------- Get main components --------
-main_components = get_main_components(df)
+# -------- Main components --------
+main_components = get_main_components(main_df)
 
 if not main_components:
     st.warning("No main components found in the uploaded file.")
@@ -69,7 +69,7 @@ if "last_component" not in st.session_state:
 # -------- Main component selector --------
 selected_component = component_selector(main_components)
 
-# -------- Reset subcomponents when component changes --------
+# -------- Reset subcomponents on component change --------
 if selected_component and selected_component != st.session_state.last_component:
     for key in list(st.session_state.keys()):
         if key.startswith("subs_"):
@@ -81,7 +81,7 @@ if selected_component:
     st.divider()
     st.subheader(f"Subcomponents for: **{selected_component}**")
 
-    sub_components = get_subcomponents(df, selected_component)
+    sub_components = get_subcomponents(main_df, selected_component)
 
     if not sub_components:
         st.warning("No subcomponents available for this component.")
@@ -102,15 +102,13 @@ if selected_component:
         st.info("Select one or more subcomponents to view data.")
         st.stop()
 
-    # -------- Filtered data --------
-    result_df = filter_data(df, selected_component, selected_subs)
+    # -------- Summary table --------
+    result_df = filter_data(main_df, selected_component, selected_subs)
 
     st.divider()
+    show_table(result_df, title="Selected Maintenance Tasks (Summary)")
 
-    # -------- Result table --------
-    show_table(result_df, title="Selected Maintenance Tasks")
-
-    # -------- Summary metrics --------
+    # -------- Metrics (summary only) --------
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -127,5 +125,27 @@ if selected_component:
             "Avg Manpower / Task",
             round(result_df.iloc[:, 6].mean(), 2)
         )
+
+    # -------- Detailed split table (ONLY when ONE subcomponent selected) --------
+    if split_df is not None and len(selected_subs) == 1:
+        st.divider()
+        st.subheader(
+            f"Detailed Time Split for: **{selected_subs[0]}**"
+        )
+
+        split_view = split_df[
+            split_df["Subcomponent"] == selected_subs[0]
+        ]
+
+        if split_view.empty:
+            st.info("No detailed split data available for this subcomponent.")
+        else:
+            # Eye-vision only: show EXACT Excel data
+            st.dataframe(
+                split_view,
+                use_container_width=True,
+                hide_index=True
+            )
+
 else:
     st.info("Select a main component to continue.")

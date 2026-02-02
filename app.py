@@ -1,7 +1,10 @@
 import streamlit as st
 import pandas as pd
+import re
 
-
+# =========================================================
+# 🔐 LOGIN GATE
+# =========================================================
 def login_gate():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
@@ -37,7 +40,9 @@ def login_gate():
 
 login_gate()
 
-
+# =========================================================
+# PAGE CONFIG
+# =========================================================
 st.set_page_config(
     page_title="Maintenance Decision Console",
     page_icon="🛠️",
@@ -53,55 +58,42 @@ Module → Sub Module → Components → Summary
 
 st.divider()
 
-
+# =========================================================
+# LOAD EXCEL
+# =========================================================
 uploaded_file = st.sidebar.file_uploader("Upload Excel file", type=["xlsx"])
 if not uploaded_file:
     st.stop()
 
 df = pd.read_excel(uploaded_file)
 
+# =========================================================
+# 🔧 NORMALIZE TEXT (THIS IS THE FIX)
+# =========================================================
+def normalize(val):
+    if pd.isna(val):
+        return val
+    val = str(val)
+    val = re.sub(r"\s+", " ", val)  # collapse multiple spaces
+    return val.strip()
 
-def find_col(keyword):
-    for col in df.columns:
-        if keyword in col.lower().replace(" ", ""):
-            return col
-    return None
+for col in ["Module", "Sub Module", "Components"]:
+    df[col] = df[col].apply(normalize)
 
-COL_MODULE = find_col("module")
-COL_SUBMODULE = find_col("sub")
-COL_COMPONENT = find_col("component")
-COL_PREP = find_col("preparation")
-COL_ACTIVITY = find_col("activity")
-COL_TOTAL = find_col("total")
-COL_MAN = find_col("man")
-COL_PRACTICAL = find_col("practical")
-
-required = {
-    "Module": COL_MODULE,
-    "Sub Module": COL_SUBMODULE,
-    "Components": COL_COMPONENT,
-    "Preparation": COL_PREP,
-    "Activity": COL_ACTIVITY,
-    "Total time": COL_TOTAL,
-    "Man power": COL_MAN,
-    "Practical/Theoretical": COL_PRACTICAL,
-}
-
-missing = [k for k, v in required.items() if v is None]
-if missing:
-    st.error(f"Could not detect columns for: {missing}")
-    st.stop()
-
-
+# =========================================================
+# SESSION STATE
+# =========================================================
 if "module" not in st.session_state:
     st.session_state.module = None
 if "submodule" not in st.session_state:
     st.session_state.submodule = None
 
-
+# =========================================================
+# MODULE (BOX CLICK)
+# =========================================================
 st.subheader("Module")
 
-modules = sorted(df[COL_MODULE].dropna().unique())
+modules = sorted(df["Module"].dropna().unique())
 cols = st.columns(min(5, len(modules)))
 
 clicked = None
@@ -116,17 +108,19 @@ if clicked:
 if not st.session_state.module:
     st.stop()
 
-
+# =========================================================
+# SUB MODULE
+# =========================================================
 st.subheader("Sub Module")
 
 submodules = sorted(
-    df[df[COL_MODULE] == st.session_state.module][COL_SUBMODULE]
+    df[df["Module"] == st.session_state.module]["Sub Module"]
     .dropna().unique()
 )
 
 selected_sub = st.selectbox(
     "Select sub module",
-    options=["-- Select --"] + submodules
+    options=["-- Select --"] + list(submodules)
 )
 
 if selected_sub == "-- Select --":
@@ -134,15 +128,18 @@ if selected_sub == "-- Select --":
 
 st.session_state.submodule = selected_sub
 
-
+# =========================================================
+# COMPONENTS (THIS WILL NOW SHOW ALL)
+# =========================================================
 st.subheader("Components")
 
 components = sorted(
     df[
-        (df[COL_MODULE] == st.session_state.module) &
-        (df[COL_SUBMODULE] == st.session_state.submodule)
-    ][COL_COMPONENT]
-    .dropna().unique()
+        (df["Module"] == st.session_state.module) &
+        (df["Sub Module"] == st.session_state.submodule)
+    ]["Components"]
+    .dropna()
+    .unique()
 )
 
 selected_components = st.multiselect(
@@ -153,11 +150,13 @@ selected_components = st.multiselect(
 if not selected_components:
     st.stop()
 
-
+# =========================================================
+# FILTERED TABLE
+# =========================================================
 filtered_df = df[
-    (df[COL_MODULE] == st.session_state.module) &
-    (df[COL_SUBMODULE] == st.session_state.submodule) &
-    (df[COL_COMPONENT].isin(selected_components))
+    (df["Module"] == st.session_state.module) &
+    (df["Sub Module"] == st.session_state.submodule) &
+    (df["Components"].isin(selected_components))
 ].copy()
 
 filtered_df.reset_index(drop=True, inplace=True)

@@ -30,7 +30,13 @@ if not uploaded_file:
 df = pd.read_excel(uploaded_file)
 
 # --------------------------------------------------
-# NORMALIZE TEXT (CRITICAL)
+# 🔥 FIX MERGED CELLS (THIS IS THE KEY)
+# --------------------------------------------------
+df["Module"] = df["Module"].ffill()
+df["Sub Module"] = df["Sub Module"].ffill()
+
+# --------------------------------------------------
+# NORMALIZE TEXT
 # --------------------------------------------------
 def normalize(val):
     if pd.isna(val):
@@ -43,7 +49,7 @@ for col in ["Module", "Sub Module", "Components"]:
     df[col] = df[col].apply(normalize)
 
 # --------------------------------------------------
-# MODULE FILTER (MULTISELECT)
+# MODULE FILTER
 # --------------------------------------------------
 st.subheader("Module")
 
@@ -58,11 +64,10 @@ selected_modules = st.multiselect(
 if not selected_modules:
     st.stop()
 
-# IMPORTANT: do NOT over-filter here
 df_module = df[df["Module"].isin(selected_modules)]
 
 # --------------------------------------------------
-# SUB MODULE FILTER (MULTISELECT, UNION)
+# SUB MODULE FILTER (NOW WORKS)
 # --------------------------------------------------
 st.subheader("Sub Module")
 
@@ -84,7 +89,7 @@ df_submodule = df_module[
 ]
 
 # --------------------------------------------------
-# COMPONENT FILTER (MULTISELECT, UNION)
+# COMPONENT FILTER
 # --------------------------------------------------
 st.subheader("Components")
 
@@ -106,9 +111,9 @@ df_final = df_submodule[
 ].copy()
 
 # --------------------------------------------------
-# FINAL TABLE (FIXED SERIAL NUMBER)
+# FINAL TABLE (SINGLE SERIAL NUMBER)
 # --------------------------------------------------
-df_final = df_final.reset_index(drop=True)
+df_final.reset_index(drop=True, inplace=True)
 df_final.insert(0, "No", range(1, len(df_final) + 1))
 
 st.divider()
@@ -117,5 +122,5 @@ st.subheader("Filtered Maintenance Data")
 st.dataframe(
     df_final,
     use_container_width=True,
-    hide_index=True   # 🔥 THIS REMOVES EXTRA NUMBER COLUMN
+    hide_index=True
 )

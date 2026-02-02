@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# =========================================================
-# 🔐 LOGIN GATE
-# =========================================================
+
 def login_gate():
     if "authenticated" not in st.session_state:
         st.session_state.authenticated = False
@@ -39,9 +37,7 @@ def login_gate():
 
 login_gate()
 
-# =========================================================
-# PAGE CONFIG
-# =========================================================
+
 st.set_page_config(
     page_title="Maintenance Decision Console",
     page_icon="🛠️",
@@ -57,18 +53,14 @@ Module → Sub Module → Components → Summary
 
 st.divider()
 
-# =========================================================
-# LOAD EXCEL
-# =========================================================
+
 uploaded_file = st.sidebar.file_uploader("Upload Excel file", type=["xlsx"])
 if not uploaded_file:
     st.stop()
 
 df = pd.read_excel(uploaded_file)
 
-# =========================================================
-# 🔍 AUTO-DETECT COLUMNS (NO MORE HEADER ISSUES)
-# =========================================================
+
 def find_col(keyword):
     for col in df.columns:
         if keyword in col.lower().replace(" ", ""):
@@ -100,17 +92,13 @@ if missing:
     st.error(f"Could not detect columns for: {missing}")
     st.stop()
 
-# =========================================================
-# SESSION STATE
-# =========================================================
+
 if "module" not in st.session_state:
     st.session_state.module = None
 if "submodule" not in st.session_state:
     st.session_state.submodule = None
 
-# =========================================================
-# MODULE (BOX CLICK)
-# =========================================================
+
 st.subheader("Module")
 
 modules = sorted(df[COL_MODULE].dropna().unique())
@@ -128,9 +116,7 @@ if clicked:
 if not st.session_state.module:
     st.stop()
 
-# =========================================================
-# SUB MODULE
-# =========================================================
+
 st.subheader("Sub Module")
 
 submodules = sorted(
@@ -148,9 +134,7 @@ if selected_sub == "-- Select --":
 
 st.session_state.submodule = selected_sub
 
-# =========================================================
-# COMPONENTS
-# =========================================================
+
 st.subheader("Components")
 
 components = sorted(
@@ -169,9 +153,7 @@ selected_components = st.multiselect(
 if not selected_components:
     st.stop()
 
-# =========================================================
-# FILTER & CLEAN TABLE
-# =========================================================
+
 filtered_df = df[
     (df[COL_MODULE] == st.session_state.module) &
     (df[COL_SUBMODULE] == st.session_state.submodule) &

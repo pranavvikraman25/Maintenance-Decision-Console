@@ -124,3 +124,44 @@ st.dataframe(
     use_container_width=True,
     hide_index=True
 )
+import json
+
+# --------------------------------------------------
+# PROCEDURE / SPLIT DATA (JSON BASED – OPTION B)
+# --------------------------------------------------
+
+st.divider()
+st.subheader("Procedure / Split Details")
+
+for comp in selected_components:
+
+    row = filtered_df[filtered_df["Components"] == comp]
+
+    if row.empty:
+        continue
+
+    proc_json = row.iloc[0].get("Procedure_JSON", None)
+
+    if pd.isna(proc_json) or str(proc_json).strip() == "":
+        continue
+
+    try:
+        steps = json.loads(proc_json)
+
+        if not isinstance(steps, list) or len(steps) == 0:
+            continue
+
+        proc_df = pd.DataFrame(steps)
+
+        proc_df.insert(0, "Step No", range(1, len(proc_df) + 1))
+
+        st.markdown(f"### 🔹 {comp}")
+
+        st.dataframe(
+            proc_df,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    except Exception as e:
+        st.error(f"Invalid JSON format for component: {comp}")

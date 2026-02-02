@@ -1,161 +1,177 @@
 import streamlit as st
 import pandas as pd
-import re
+import json
+import base64
 
 # --------------------------------------------------
 # PAGE CONFIG
 # --------------------------------------------------
 st.set_page_config(
     page_title="Maintenance Decision Console",
-    layout="wide",
-    page_icon="🛠️"
+    layout="wide"
 )
 
+# --------------------------------------------------
+# BACKGROUND + LOGO (optional, safe)
+# --------------------------------------------------
+def set_background(image_path: str, opacity: float = 0.08):
+    try:
+        with open(image_path, "rb") as img:
+            encoded = base64.b64encode(img.read()).decode()
+        st.markdown(
+            f"""
+            <style>
+            .stApp {{
+                background:
+                    linear-gradient(
+                        rgba(255,255,255,{1-opacity}),
+                        rgba(255,255,255,{1-opacity})
+                    ),
+                    url("data:image/png;base64,{encoded}");
+                background-size: cover;
+                background-position: center;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+    except FileNotFoundError:
+        pass
+
+
+set_background("assets/background.png")
+
+# --------------------------------------------------
+# TITLE
+# --------------------------------------------------
 st.title("Maintenance Decision Console")
 st.caption("Module → Sub Module → Components → Summary")
-st.divider()
 
 # --------------------------------------------------
 # FILE UPLOAD
 # --------------------------------------------------
-uploaded_file = st.sidebar.file_uploader(
+uploaded_file = st.file_uploader(
     "Upload Excel file",
     type=["xlsx"]
 )
 
 if not uploaded_file:
-    st.info("Upload an Excel file to begin.")
+    st.info("Upload the Excel file to begin.")
     st.stop()
 
+# --------------------------------------------------
+# LOAD DATA
+# --------------------------------------------------
 df = pd.read_excel(uploaded_file)
 
-# --------------------------------------------------
-# 🔥 FIX MERGED CELLS (THIS IS THE KEY)
-# --------------------------------------------------
-df["Module"] = df["Module"].ffill()
-df["Sub Module"] = df["Sub Module"].ffill()
+# Normalize column names (DO NOT RENAME USER DATA)
+df.columns = [c.strip() for c in df.columns]
+
+# REQUIRED COLUMNS (STRICT)
+REQUIRED_COLUMNS = [
+    "Module",
+    "Sub Module",
+    "Components",
+    "Preparation/Finalization (h:mm:ss)",
+    "Activity (h:mm:ss)",
+    "Total time (h:mm:ss)",
+    "No of man power",
+    "Practical(Site)/ Theoretical"
+]
+
+missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+if missing:
+    st.error(f"Missing required columns: {missing}")
+    st.stop()
 
 # --------------------------------------------------
-# NORMALIZE TEXT
-# --------------------------------------------------
-def normalize(val):
-    if pd.isna(val):
-        return None
-    val = str(val)
-    val = re.sub(r"\s+", " ", val)
-    return val.strip()
-
-for col in ["Module", "Sub Module", "Components"]:
-    df[col] = df[col].apply(normalize)
-
-# --------------------------------------------------
-# MODULE FILTER
+# FILTER UI
 # --------------------------------------------------
 st.subheader("Module")
-
-modules = sorted(df["Module"].dropna().unique())
-
 selected_modules = st.multiselect(
     "Select module(s)",
-    options=modules,
+    options=sorted(df["Module"].dropna().unique()),
     default=[]
 )
 
 if not selected_modules:
+    st.info("Select at least one Module.")
     st.stop()
 
-df_module = df[df["Module"].isin(selected_modules)]
+sub_df = df[df["Module"].isin(selected_modules)]
 
-# --------------------------------------------------
-# SUB MODULE FILTER (NOW WORKS)
-# --------------------------------------------------
 st.subheader("Sub Module")
-
-submodules = sorted(
-    df_module["Sub Module"].dropna().unique()
-)
-
 selected_submodules = st.multiselect(
     "Select sub module(s)",
-    options=submodules,
+    options=sorted(sub_df["Sub Module"].dropna().unique()),
     default=[]
 )
 
 if not selected_submodules:
+    st.info("Select at least one Sub Module.")
     st.stop()
 
-df_submodule = df_module[
-    df_module["Sub Module"].isin(selected_submodules)
-]
+comp_df = sub_df[sub_df["Sub Module"].isin(selected_submodules)]
 
-# --------------------------------------------------
-# COMPONENT FILTER
-# --------------------------------------------------
 st.subheader("Components")
-
-components = sorted(
-    df_submodule["Components"].dropna().unique()
-)
-
 selected_components = st.multiselect(
     "Select component(s)",
-    options=components,
+    options=sorted(comp_df["Components"].dropna().unique()),
     default=[]
 )
 
 if not selected_components:
+    st.info("Select at least one Component.")
     st.stop()
 
-df_final = df_submodule[
-    df_submodule["Components"].isin(selected_components)
-].copy()
+# --------------------------------------------------
+# FINAL FILTER
+# --------------------------------------------------
+filtered_df = comp_df[comp_df["Components"].isin(selected_components)].copy()
+
+# Reset serial number
+filtered_df.insert(0, "No", range(1, len(filtered_df) + 1))
 
 # --------------------------------------------------
-# FINAL TABLE (SINGLE SERIAL NUMBER)
+# SUMMARY TABLE
 # --------------------------------------------------
-df_final.reset_index(drop=True, inplace=True)
-df_final.insert(0, "No", range(1, len(df_final) + 1))
-
-st.divider()
 st.subheader("Filtered Maintenance Data")
-
 st.dataframe(
-    df_final,
-    use_container_width=True,
-    hide_index=True
+    filtered_df,
+    use_container_width=True
 )
 
+# --------------------------------------------------
+# PROCEDURE / SPLIT DATA (OPTION B – JSON)
+# --------------------------------------------------
+# Expected format:
+# Procedure_JSON column (optional)
+# Each cell contains JSON list of steps
 
-import json
-
-st.divider()
-st.subheader("Procedure / Split Details")
-
-if "Procedure_JSON" in filtered_data.columns:
+if "Procedure_JSON" in filtered_df.columns:
+    st.subheader("Detailed Procedure / Split Time")
 
     for comp in selected_components:
+        rows = filtered_df[filtered_df["Components"] == comp]
 
-        row = filtered_data[filtered_data["Components"] == comp]
+        for _, row in rows.iterrows():
+            raw = row.get("Procedure_JSON")
 
-        if row.empty:
-            continue
-
-        proc_json = row.iloc[0]["Procedure_JSON"]
-
-        if pd.isna(proc_json) or str(proc_json).strip() == "":
-            continue
-
-        try:
-            steps = json.loads(proc_json)
-
-            if not isinstance(steps, list) or len(steps) == 0:
+            if pd.isna(raw):
                 continue
 
-            proc_df = pd.DataFrame(steps)
-            proc_df.insert(0, "Step No", range(1, len(proc_df) + 1))
+            try:
+                steps = json.loads(raw)
+                proc_df = pd.DataFrame(steps)
 
-            st.markdown(f"### 🔹 {comp}")
-            st.dataframe(proc_df, use_container_width=True, hide_index=True)
+                st.markdown(f"### 🔧 {comp}")
+                st.dataframe(proc_df, use_container_width=True)
 
-        except Exception as e:
-            st.error(f"Invalid Procedure_JSON for component: {comp}")
+            except Exception:
+                st.warning(f"Invalid JSON for component: {comp}")
+
+# --------------------------------------------------
+# DEBUG (optional)
+# --------------------------------------------------
+with st.expander("View detected columns"):
+    st.write(list(df.columns))

@@ -124,44 +124,38 @@ st.dataframe(
     use_container_width=True,
     hide_index=True
 )
-import json
 
-# --------------------------------------------------
-# PROCEDURE / SPLIT DATA (JSON BASED – OPTION B)
-# --------------------------------------------------
+
+import json
 
 st.divider()
 st.subheader("Procedure / Split Details")
 
-for comp in selected_components:
+if "Procedure_JSON" in filtered_data.columns:
 
-    row = filtered_df[filtered_df["Components"] == comp]
+    for comp in selected_components:
 
-    if row.empty:
-        continue
+        row = filtered_data[filtered_data["Components"] == comp]
 
-    proc_json = row.iloc[0].get("Procedure_JSON", None)
-
-    if pd.isna(proc_json) or str(proc_json).strip() == "":
-        continue
-
-    try:
-        steps = json.loads(proc_json)
-
-        if not isinstance(steps, list) or len(steps) == 0:
+        if row.empty:
             continue
 
-        proc_df = pd.DataFrame(steps)
+        proc_json = row.iloc[0]["Procedure_JSON"]
 
-        proc_df.insert(0, "Step No", range(1, len(proc_df) + 1))
+        if pd.isna(proc_json) or str(proc_json).strip() == "":
+            continue
 
-        st.markdown(f"### 🔹 {comp}")
+        try:
+            steps = json.loads(proc_json)
 
-        st.dataframe(
-            proc_df,
-            use_container_width=True,
-            hide_index=True
-        )
+            if not isinstance(steps, list) or len(steps) == 0:
+                continue
 
-    except Exception as e:
-        st.error(f"Invalid JSON format for component: {comp}")
+            proc_df = pd.DataFrame(steps)
+            proc_df.insert(0, "Step No", range(1, len(proc_df) + 1))
+
+            st.markdown(f"### 🔹 {comp}")
+            st.dataframe(proc_df, use_container_width=True, hide_index=True)
+
+        except Exception as e:
+            st.error(f"Invalid Procedure_JSON for component: {comp}")

@@ -13,7 +13,6 @@ st.set_page_config(
 
 st.title("Maintenance Decision Console")
 st.caption("Module → Sub Module → Components → Summary")
-
 st.divider()
 
 # --------------------------------------------------
@@ -31,7 +30,7 @@ if not uploaded_file:
 df = pd.read_excel(uploaded_file)
 
 # --------------------------------------------------
-# NORMALIZE TEXT (MANDATORY)
+# NORMALIZE TEXT (CRITICAL)
 # --------------------------------------------------
 def normalize(val):
     if pd.isna(val):
@@ -44,85 +43,79 @@ for col in ["Module", "Sub Module", "Components"]:
     df[col] = df[col].apply(normalize)
 
 # --------------------------------------------------
-# MODULE (MULTISELECT – NO DEFAULT)
+# MODULE FILTER (MULTISELECT)
 # --------------------------------------------------
 st.subheader("Module")
 
-all_modules = sorted(df["Module"].dropna().unique())
+modules = sorted(df["Module"].dropna().unique())
 
 selected_modules = st.multiselect(
     "Select module(s)",
-    options=all_modules,
+    options=modules,
     default=[]
 )
 
-# Stop here if nothing selected
 if not selected_modules:
     st.stop()
 
+# IMPORTANT: do NOT over-filter here
+df_module = df[df["Module"].isin(selected_modules)]
+
 # --------------------------------------------------
-# SUB MODULE (MULTISELECT – DEPENDS ON MODULE)
+# SUB MODULE FILTER (MULTISELECT, UNION)
 # --------------------------------------------------
 st.subheader("Sub Module")
 
-submodule_df = df[df["Module"].isin(selected_modules)]
-
-all_submodules = sorted(
-    submodule_df["Sub Module"].dropna().unique()
+submodules = sorted(
+    df_module["Sub Module"].dropna().unique()
 )
 
 selected_submodules = st.multiselect(
     "Select sub module(s)",
-    options=all_submodules,
+    options=submodules,
     default=[]
 )
 
-# Stop here if nothing selected
 if not selected_submodules:
     st.stop()
 
+df_submodule = df_module[
+    df_module["Sub Module"].isin(selected_submodules)
+]
+
 # --------------------------------------------------
-# COMPONENTS (MULTISELECT – DEPENDS ON SUB MODULE)
+# COMPONENT FILTER (MULTISELECT, UNION)
 # --------------------------------------------------
 st.subheader("Components")
 
-component_df = submodule_df[
-    submodule_df["Sub Module"].isin(selected_submodules)
-]
-
-all_components = sorted(
-    component_df["Components"].dropna().unique()
+components = sorted(
+    df_submodule["Components"].dropna().unique()
 )
 
 selected_components = st.multiselect(
     "Select component(s)",
-    options=all_components,
+    options=components,
     default=[]
 )
 
-# Stop here if nothing selected
 if not selected_components:
     st.stop()
 
-# --------------------------------------------------
-# FINAL FILTER (NO MAGIC)
-# --------------------------------------------------
-final_df = component_df[
-    component_df["Components"].isin(selected_components)
+df_final = df_submodule[
+    df_submodule["Components"].isin(selected_components)
 ].copy()
 
-# Reset numbering
-final_df.reset_index(drop=True, inplace=True)
-final_df.insert(0, "No", range(1, len(final_df) + 1))
+# --------------------------------------------------
+# FINAL TABLE (FIXED SERIAL NUMBER)
+# --------------------------------------------------
+df_final = df_final.reset_index(drop=True)
+df_final.insert(0, "No", range(1, len(df_final) + 1))
 
-# --------------------------------------------------
-# OUTPUT
-# --------------------------------------------------
 st.divider()
 st.subheader("Filtered Maintenance Data")
 
 st.dataframe(
-    final_df,
+    df_final,
     use_container_width=True,
-    height=550
+    hide_index=True   # 🔥 THIS REMOVES EXTRA NUMBER COLUMN
 )
